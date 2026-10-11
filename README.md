@@ -9,6 +9,12 @@ Apache-2.0 text (or vice versa) when scaffolding the project, and it
 just sits there wrong until a legal/compliance pass — or a downstream
 consumer's own `licenselint`-style tool — catches it.
 
+## Installation
+
+```sh
+cargo install --path .
+```
+
 ## Usage
 
 ```bash
