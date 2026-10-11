@@ -211,6 +211,19 @@ pub fn find_license_file(dir: &Path) -> Option<PathBuf> {
 }
 
 // ---------------------------------------------------------------------
+// CONTRIBUTING file
+// ---------------------------------------------------------------------
+
+const CONTRIBUTING_FILENAMES: &[&str] = &["CONTRIBUTING.md", "CONTRIBUTING", "CONTRIBUTING.txt"];
+
+pub fn find_contributing(dir: &Path) -> Option<PathBuf> {
+    CONTRIBUTING_FILENAMES
+        .iter()
+        .map(|n| dir.join(n))
+        .find(|p| p.is_file())
+}
+
+// ---------------------------------------------------------------------
 // README sections
 // ---------------------------------------------------------------------
 
@@ -420,6 +433,33 @@ pub fn audit_repo(dir: &Path) -> AuditReport {
         }),
     }
 
+    // 4. CONTRIBUTING presence
+    match find_contributing(dir) {
+        None => {
+            checks.push(CheckResult {
+                name: "contributing_present",
+                status: CheckStatus::Fail,
+                detail: format!(
+                    "no CONTRIBUTING file found (looked for {})",
+                    CONTRIBUTING_FILENAMES.join(", ")
+                ),
+            });
+        }
+        Some(contributing_path) => {
+            checks.push(CheckResult {
+                name: "contributing_present",
+                status: CheckStatus::Pass,
+                detail: format!(
+                    "found {}",
+                    contributing_path
+                        .strip_prefix(dir)
+                        .unwrap_or(&contributing_path)
+                        .display()
+                ),
+            });
+        }
+    }
+
     AuditReport {
         root: dir.to_path_buf(),
         checks,
@@ -594,6 +634,7 @@ mod tests {
             "# x\n\n## Install\n\nx\n\n## Usage\n\nx\n",
         )
         .unwrap();
+        fs::write(dir.join("CONTRIBUTING.md"), "contrib").unwrap();
         let report = audit_repo(&dir);
         assert!(!report.passed());
         let license_check = report
@@ -619,6 +660,7 @@ mod tests {
             "# x\n\n## Install\n\nx\n\n## Usage\n\nx\n",
         )
         .unwrap();
+        fs::write(dir.join("CONTRIBUTING.md"), "contrib").unwrap();
         let report = audit_repo(&dir);
         assert!(!report.passed());
         let check = report
@@ -645,6 +687,7 @@ mod tests {
             "# x\n\n## Install\n\nx\n\n## Usage\n\nx\n",
         )
         .unwrap();
+        fs::write(dir.join("CONTRIBUTING.md"), "contrib").unwrap();
         fs::create_dir_all(dir.join(".github").join("workflows")).unwrap();
         fs::write(
             dir.join(".github").join("workflows").join("ci.yml"),
@@ -672,6 +715,37 @@ mod tests {
     fn has_ci_config_none_when_absent() {
         let dir = scratch_dir("no-ci");
         assert!(has_ci_config(&dir).is_none());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn audit_repo_flags_missing_contributing() {
+        let dir = scratch_dir("missing-contributing");
+        fs::write(
+            dir.join("Cargo.toml"),
+            "[package]\nname = \"x\"\nversion = \"0.1.0\"\nlicense = \"MIT\"\n",
+        )
+        .unwrap();
+        fs::write(dir.join("LICENSE"), MIT_TEXT).unwrap();
+        fs::write(
+            dir.join("README.md"),
+            "# x\n\n## Install\n\nx\n\n## Usage\n\nx\n",
+        )
+        .unwrap();
+        fs::create_dir_all(dir.join(".github").join("workflows")).unwrap();
+        fs::write(
+            dir.join(".github").join("workflows").join("ci.yml"),
+            "name: CI\n",
+        )
+        .unwrap();
+        let report = audit_repo(&dir);
+        assert!(!report.passed());
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "contributing_present")
+            .unwrap();
+        assert_eq!(check.status, CheckStatus::Fail);
         fs::remove_dir_all(&dir).ok();
     }
 }
